@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <title>設計書アップロード</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div class="container">
+            <h1>単体テスト仕様書生成</br>（Claude Sonnet 4.5）</h1>
+
+            <div class="file-inputs">
+                <label>アクセスキー：</label>
+                <input type="password" id="apiKeyInput" placeholder="アクセスキーを入力" />
+            </div>
+
+            <div class="file-inputs">
+                <label>詳細設計書（Excel形式）：</label>
+                <input type="file" id="fileInput" accept=".xlsx" multiple />
+                <!-- <small style="color: #666;">※複数のExcelファイルを選択できます</small> -->
+            </div>
+
+            <div class="granularity-selection">
+                <label>テスト仕様書の粒度：</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="granularity" value="simple" checked />
+                        <span>簡易版</span>
+                        <small>テストケースと期待結果を簡潔に記載</small>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="granularity" value="detailed" />
+                        <span>詳細版</span>
+                        <small>前提条件・事前データ・操作手順を詳細に記載</small>
+                    </label>
+                </div>
+            </div>
+
+            <br />
+            <button id="uploadBtn">アップロードして生成</button>
+
+            <p id="status"></p>
+        </div>
+        <script src="script.js"></script>
+    </body>
+</html>
