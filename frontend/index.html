@@ -4,15 +4,15 @@
         <meta charset="UTF-8" />
         <title>設計書アップロード</title>
         <link rel="stylesheet" href="style.css" />
+        <script src="auth.js"></script>
     </head>
     <body>
-        <div class="container">
+        <noscript>
+            <h1>JavaScriptを有効にしてください</h1>
+            <p>このサイトはJavaScriptが必要です。</p>
+        </noscript>
+        <div class="container" style="display:none;" id="mainContent">
             <h1>単体テスト仕様書生成</br>（Claude Sonnet 4.5）</h1>
-
-            <div class="file-inputs">
-                <label>アクセスキー：</label>
-                <input type="password" id="apiKeyInput" placeholder="アクセスキーを入力" />
-            </div>
 
             <div class="file-inputs">
                 <label>詳細設計書（Excel形式）：</label>
@@ -41,6 +41,9 @@
 
             <p id="status"></p>
         </div>
+        <script>
+            document.getElementById('mainContent').style.display = 'block';
+        </script>
         <script src="script.js"></script>
     </body>
 </html>

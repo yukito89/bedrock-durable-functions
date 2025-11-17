@@ -1,16 +1,9 @@
 const status = document.querySelector("#status");
 const uploadBtn = document.querySelector("#uploadBtn");
 const fileInput = document.querySelector("#fileInput");
-const apiKeyInput = document.querySelector("#apiKeyInput");
 
 uploadBtn.addEventListener("click", async () => {
-    const apiKey = apiKeyInput.value.trim();
     const files = fileInput.files;
-    
-    if (!apiKey) {
-        status.textContent = "アクセスキーを入力してください";
-        return;
-    }
     
     if (files.length === 0) {
         status.textContent = "詳細設計書を選択してください";
@@ -30,9 +23,9 @@ uploadBtn.addEventListener("click", async () => {
     status.textContent = "生成中...";
 
     // ==== ローカル開発用 ====
-    // const endpoint = "http://localhost:7071/api/upload?code=" + encodeURIComponent(apiKey);
+    // const endpoint = "http://localhost:7071/api/upload";
     // ==== 本番環境用 ====
-    const endpoint = "https://poc-func.azurewebsites.net/api/upload?code=" + encodeURIComponent(apiKey);
+    const endpoint = "https://poc-func.azurewebsites.net/api/upload";
 
     try {
         const res = await fetch(endpoint, {
@@ -43,8 +36,8 @@ uploadBtn.addEventListener("click", async () => {
         // console.log(res)  // 本番環境ではコメントアウト
 
         if (!res.ok) {
-            if (res.status === 401) {
-                status.textContent = "認証エラー: アクセスキーが無効です";
+            if (res.status === 401 || res.status === 403) {
+                status.textContent = "アクセスが拒否されました（IP制限）";
             } else if (res.status === 400) {
                 const errorText = await res.text();
                 status.textContent = `入力エラー: ${errorText}`;

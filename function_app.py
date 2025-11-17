@@ -24,8 +24,8 @@ from prompts import (
 # .envファイルから環境変数を読み込む
 load_dotenv()
 
-# FunctionAppの初期化
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+# FunctionAppの初期化（IP制限を使用するため認証レベルをANONYMOUSに変更）
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 # --- LLMサービス設定 ---
 llm_service = os.getenv("LLM_SERVICE", "AWS")
@@ -173,14 +173,6 @@ def create_test_spec(prompt: str, granularity: str = "simple") -> str:
 
 @app.route(route="upload", methods=["POST"])
 def upload(req: func.HttpRequest) -> func.HttpResponse:
-    # ローカル環境でのキー検証（本番環境ではAzureが自動検証）
-    if os.getenv("AZURE_FUNCTIONS_ENVIRONMENT") != "Production":
-        expected_key = os.getenv("LOCAL_FUNCTION_KEY")
-        provided_key = req.params.get("code")
-        if provided_key != expected_key:
-            logging.warning("認証失敗")
-            return func.HttpResponse("Unauthorized", status_code=401)
-    
     try:
         # 複数のExcelファイルを受け取る（getlistで複数ファイルに対応）
         files = req.files.getlist("documentFiles")
