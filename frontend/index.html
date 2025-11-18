@@ -14,12 +14,52 @@
         <div class="container" style="display:none;" id="mainContent">
             <h1>単体テスト仕様書生成</br>（Claude Sonnet 4.5）</h1>
 
-            <div class="file-inputs">
-                <label>詳細設計書（Excel形式）：</label>
-                <input type="file" id="fileInput" accept=".xlsx" multiple />
-                <!-- <small style="color: #666;">※複数のExcelファイルを選択できます</small> -->
+            <!-- モード選択 -->
+            <div class="mode-selection">
+                <label>生成モード：</label>
+                <div class="radio-group-horizontal">
+                    <label class="radio-label-inline">
+                        <input type="radio" name="mode" value="normal" checked />
+                        <span>通常版</span>
+                    </label>
+                    <label class="radio-label-inline">
+                        <input type="radio" name="mode" value="diff" />
+                        <span>差分版</span>
+                    </label>
+                </div>
             </div>
 
+            <!-- 通常版ファイル入力 -->
+            <div id="normalMode" class="mode-content">
+                <div class="file-inputs">
+                    <label>詳細設計書（Excel形式）：</label>
+                    <input type="file" id="fileInput" accept=".xlsx" multiple />
+                </div>
+            </div>
+
+            <!-- 差分版ファイル入力 -->
+            <div id="diffMode" class="mode-content" style="display:none;">
+                <div class="file-section old-version">
+                    <h2>📁 旧版ファイル（必須）</h2>
+                    <div class="file-inputs">
+                        <label>旧版 構造化設計書（.md）：</label>
+                        <input type="file" id="oldStructuredMd" accept=".md" required />
+                    </div>
+                    <div class="file-inputs">
+                        <label>旧版 テスト仕様書（.md）：</label>
+                        <input type="file" id="oldTestSpecMd" accept=".md" required />
+                    </div>
+                </div>
+                <div class="file-section new-version">
+                    <h2>📄 新版ファイル（必須）</h2>
+                    <div class="file-inputs">
+                        <label>新版 設計書（.xlsx）：</label>
+                        <input type="file" id="newExcelFiles" accept=".xlsx" multiple required />
+                    </div>
+                </div>
+            </div>
+
+            <!-- 粒度選択 -->
             <div class="granularity-selection">
                 <label>テスト仕様書の粒度：</label>
                 <div class="radio-group">

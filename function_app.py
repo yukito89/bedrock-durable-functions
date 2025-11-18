@@ -18,7 +18,10 @@ from prompts import (
     STRUCTURING_PROMPT, 
     EXTRACT_TEST_PERSPECTIVES_PROMPT, 
     CREATE_TEST_SPEC_PROMPT_SIMPLE,
-    CREATE_TEST_SPEC_PROMPT_DETAILED
+    CREATE_TEST_SPEC_PROMPT_DETAILED,
+    DIFF_DETECTION_PROMPT,
+    EXTRACT_TEST_PERSPECTIVES_PROMPT_WITH_DIFF,
+    CREATE_TEST_SPEC_PROMPT_WITH_DIFF
 )
 
 # .envファイルから環境変数を読み込む
@@ -168,6 +171,40 @@ def create_test_spec(prompt: str, granularity: str = "simple") -> str:
         return call_llm(CREATE_TEST_SPEC_PROMPT_DETAILED, prompt)
     else:
         return call_llm(CREATE_TEST_SPEC_PROMPT_SIMPLE, prompt)
+
+def process_excel_to_markdown(files) -> str:
+    """Excelファイル群をMarkdownに変換
+    
+    Args:
+        files: アップロードされたExcelファイルのリスト
+    Returns:
+        統合されたMarkdown文字列
+    """
+    all_md_sheets = []
+    all_toc_list = []
+    
+    for file in files:
+        file_bytes = file.read()
+        filename = file.filename
+        excel_data = pd.read_excel(io.BytesIO(file_bytes), sheet_name=None, header=None)
+        
+        for sheet_name, df in excel_data.items():
+            full_sheet_name = f"{Path(filename).stem}_{sheet_name}"
+            anchor = re.sub(r'[^a-z0-9-]', '', full_sheet_name.strip().lower().replace(' ', '-'))
+            all_toc_list.append(f'- [{full_sheet_name}](#{anchor})')
+            
+            sheet_content = f"## {full_sheet_name}\n\n"
+            raw_text = '\n'.join(df.apply(lambda row: ' | '.join(row.astype(str).fillna('')), axis=1))
+            structuring_prompt = f'--- Excelシート「{full_sheet_name}」 ---\n{raw_text}'
+            structured_content = structuring(structuring_prompt)
+            sheet_content += structured_content
+            all_md_sheets.append(sheet_content)
+    
+    md_output = "# 詳細設計書\n\n## 目次\n\n"
+    md_output += "\n".join(all_toc_list)
+    md_output += "\n\n---\n\n"
+    md_output += "\n\n---\n\n".join(all_md_sheets)
+    return md_output
 
 
 
@@ -401,3 +438,151 @@ def upload(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"処理全体で予期せぬエラーが発生: {e}")
         return func.HttpResponse("処理中にサーバーエラーが発生しました", status_code=500)
+
+
+@app.route(route="upload_diff", methods=["POST"])
+def upload_diff(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        # 新版Excel（必須）
+        new_excel_files = req.files.getlist("newExcelFiles")
+        if not new_excel_files:
+            return func.HttpResponse("新版設計書がアップロードされていません", status_code=400)
+        
+        # 旧版ファイル（必須）
+        old_structured_md_file = req.files.get("oldStructuredMd")
+        old_test_spec_md_file = req.files.get("oldTestSpecMd")
+        
+        if not old_structured_md_file:
+            return func.HttpResponse("旧版構造化設計書がアップロードされていません", status_code=400)
+        if not old_test_spec_md_file:
+            return func.HttpResponse("旧版テスト仕様書がアップロードされていません", status_code=400)
+        
+        granularity = req.form.get("granularity", "simple")
+        if granularity not in ["simple", "detailed"]:
+            granularity = "simple"
+            
+    except Exception as e:
+        logging.error(f"ファイル取得エラー: {e}")
+        return func.HttpResponse("ファイルの取得に失敗しました", status_code=400)
+
+    logging.info("差分版テスト生成を開始します")
+
+    try:
+        # Step 1: 新版Excelを構造化
+        logging.info("新版Excelを構造化中...")
+        new_structured_md = process_excel_to_markdown(new_excel_files)
+        
+        # Step 2: 旧版情報の取得（必須）
+        logging.info("旧版ファイルを読み込み中...")
+        old_structured_md = old_structured_md_file.read().decode('utf-8')
+        old_test_spec_md = old_test_spec_md_file.read().decode('utf-8')
+        
+        # Step 3: 差分検知
+        logging.info("差分検知中...")
+        diff_prompt = f"""
+        【旧版設計書】
+        {old_structured_md}
+        
+        【新版設計書】
+        {new_structured_md}
+        """
+        diff_summary = call_llm(DIFF_DETECTION_PROMPT, diff_prompt)
+        logging.info("差分検知完了")
+        
+        # Step 4: テスト観点抽出（差分考慮）
+        logging.info("テスト観点抽出中...")
+        test_perspectives_prompt = f"""
+        【新版設計書】
+        {new_structured_md}
+        
+        【変更差分】
+        {diff_summary}
+        """
+        test_perspectives = call_llm(EXTRACT_TEST_PERSPECTIVES_PROMPT_WITH_DIFF, test_perspectives_prompt)
+        
+        # Step 5: テスト仕様書生成（差分・旧版考慮）
+        logging.info("テスト仕様書生成中...")
+        test_spec_prompt = f"""
+        【新版設計書】
+        {new_structured_md}
+        
+        【テスト観点】
+        {test_perspectives}
+        
+        【変更差分】
+        {diff_summary}
+        
+        【旧版テスト仕様書】
+        {old_test_spec_md}
+        """
+        test_spec_md = call_llm(CREATE_TEST_SPEC_PROMPT_WITH_DIFF, test_spec_prompt)
+        
+        # Step 6: Markdown表をExcelに変換
+        logging.info("Excel変換中...")
+        md_lines = [line.strip() for line in test_spec_md.splitlines() if line.strip().startswith("|")]
+        if not md_lines:
+            return func.HttpResponse("テスト仕様書の生成に失敗しました", status_code=500)
+        
+        tsv_text = "\n".join([line.strip("|").replace("|", "\t") for line in md_lines])
+        df = pd.read_csv(io.StringIO(tsv_text), sep="\t")
+        df.columns = [col.strip() for col in df.columns]
+        
+        # 差分版は7列構成（変更種別列あり）または6列構成
+        if "変更種別" in df.columns:
+            # 変更種別列を除外してExcelに書き込み
+            df_for_excel = df.drop(columns=["変更種別"])
+        else:
+            df_for_excel = df
+        
+        template_path = "単体テスト仕様書.xlsx"
+        wb = load_workbook(template_path)
+        ws = wb.active
+        
+        column_map = {"No": 1, "大区分": 2, "中区分": 6, "テストケース": 10, "期待結果": 23, "参照元": 42}
+        start_row = 11
+        for i, row in enumerate(df_for_excel.itertuples(index=False), start=start_row):
+            for col_name, excel_col in column_map.items():
+                if col_name in df_for_excel.columns:
+                    value = getattr(row, col_name)
+                    ws.cell(row=i, column=excel_col, value=value)
+        
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        excel_bytes = excel_buffer.read()
+        
+        # CSV生成
+        df_csv = df.copy()
+        for col in df_csv.columns:
+            df_csv[col] = df_csv[col].astype(str).str.replace('<br>', '\n', regex=False)
+        csv_buffer = io.StringIO()
+        df_csv.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        csv_bytes = csv_buffer.getvalue().encode('utf-8-sig')
+        
+        # ZIP作成
+        logging.info("ZIP作成中...")
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("新版_構造化設計書.md", new_structured_md.encode('utf-8'))
+            zip_file.writestr("旧版_構造化設計書.md", old_structured_md.encode('utf-8'))
+            zip_file.writestr("差分サマリー.md", diff_summary.encode('utf-8'))
+            zip_file.writestr("テスト観点.md", test_perspectives.encode('utf-8'))
+            zip_file.writestr("テスト仕様書.md", test_spec_md.encode('utf-8'))
+            zip_file.writestr("テスト仕様書.xlsx", excel_bytes)
+            zip_file.writestr("テスト仕様書.csv", csv_bytes)
+        
+        zip_buffer.seek(0)
+        zip_bytes = zip_buffer.read()
+        
+        output_filename = "テスト仕様書_差分版.zip"
+        encoded_filename = quote(output_filename)
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Content-Type": "application/zip",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+        return func.HttpResponse(zip_bytes, status_code=200, headers=headers)
+        
+    except Exception as e:
+        logging.error(f"差分版処理エラー: {e}")
+        return func.HttpResponse("処理中にエラーが発生しました", status_code=500)
