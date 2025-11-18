@@ -564,7 +564,6 @@ def upload_diff(req: func.HttpRequest) -> func.HttpResponse:
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             zip_file.writestr("新版_構造化設計書.md", new_structured_md.encode('utf-8'))
-            zip_file.writestr("旧版_構造化設計書.md", old_structured_md.encode('utf-8'))
             zip_file.writestr("差分サマリー.md", diff_summary.encode('utf-8'))
             zip_file.writestr("テスト観点.md", test_perspectives.encode('utf-8'))
             zip_file.writestr("テスト仕様書.md", test_spec_md.encode('utf-8'))
