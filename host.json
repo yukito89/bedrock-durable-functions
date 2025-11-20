@@ -6,6 +6,11 @@
         "isEnabled": true,
         "excludedTypes": "Request"
       }
+    },
+    "logLevel": {
+      "Function": "Information",
+      "Host": "None",
+      "Default": "None"
     }
   },
   "extensionBundle": {
