@@ -4,8 +4,9 @@ import zipfile
 
 from core import llm_service
 from core import utils
+from core.progress_manager import ProgressManager
 
-def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_spec_md_file, granularity: str) -> bytes:
+def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_spec_md_file, granularity: str, job_id: str = None) -> bytes:
     """
     差分モードでテスト仕様書一式を生成し、ZIPファイルのバイナリデータを返す
     
@@ -19,8 +20,20 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
         bytes: 生成された成果物を含むZIPファイルのバイナリデータ
     """
     logging.info("差分版テスト生成を開始します。")
-
+    logging.info(f"Job ID: {job_id}")
+    
+    progress = None
+    if job_id:
+        try:
+            progress = ProgressManager()
+            logging.info("ProgressManager初期化成功")
+        except Exception as e:
+            logging.error(f"ProgressManager初期化失敗: {e}")
+            progress = None
+    
     # Step 1: 新版Excelを構造化
+    if progress:
+        progress.update_progress(job_id, "structuring", "新版設計書を構造化中...", 10)
     # アップロードされた新版ExcelファイルをMarkdown形式に変換
     logging.info("新版Excelを構造化中...")
     new_structured_md = utils.process_excel_to_markdown(new_excel_files)
@@ -32,6 +45,8 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     old_test_spec_md = old_test_spec_md_file.read().decode('utf-8')
     
     # Step 3: 差分検知
+    if progress:
+        progress.update_progress(job_id, "diff", "差分を検知中...", 30)
     # LLMを使用して旧版と新版の設計書を比較し、変更点を抽出
     logging.info("差分検知中...")
     diff_prompt = f"【旧版設計書】\n{old_structured_md}\n\n【新版設計書】\n{new_structured_md}"
@@ -39,12 +54,16 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     logging.info("差分検知完了。")
     
     # Step 4: テスト観点抽出（差分考慮）
+    if progress:
+        progress.update_progress(job_id, "perspectives", "テスト観点を抽出中...", 50)
     # 変更差分を考慮したテスト観点をLLMで抽出
     logging.info("テスト観点抽出中...")
     perspectives_prompt = f"【新版設計書】\n{new_structured_md}\n\n【変更差分】\n{diff_summary}"
     test_perspectives = llm_service.extract_perspectives_with_diff(perspectives_prompt)
     
     # Step 5: テスト仕様書生成（差分・旧版考慮）
+    if progress:
+        progress.update_progress(job_id, "testspec", "テスト仕様書を生成中...", 70)
     # 新版設計書、変更差分、旧版テスト仕様書を考慮してテスト仕様書を生成
     logging.info("テスト仕様書生成中...")
     spec_prompt = (
@@ -57,6 +76,8 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     logging.info("テスト仕様書生成完了。")
     
     # Step 6: 成果物の変換
+    if progress:
+        progress.update_progress(job_id, "converting", "成果物を変換中...", 90)
     # Markdown形式のテスト仕様書をExcelとCSV形式に変換（差分モードフラグを有効化）
     logging.info("Excel/CSV変換中...")
     excel_bytes, csv_bytes = utils.convert_md_to_excel_and_csv(test_spec_md, is_diff_mode=True)
@@ -77,5 +98,8 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     zip_bytes = zip_buffer.read()
     
     logging.info("差分版ZIPファイルの作成が完了しました。")
+    
+    if progress:
+        progress.update_progress(job_id, "completed", "完了しました", 100)
     
     return zip_bytes

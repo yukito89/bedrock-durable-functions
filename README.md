@@ -12,6 +12,7 @@
 - 抽出されたテスト観点から、LLMが単体テスト仕様書（Markdown形式）を生成します。
 - 生成されたMarkdownを`単体テスト仕様書.xlsx`テンプレートに書き込みます。
 - 最終的な成果物（構造化設計書.md, テスト観点.md, テスト仕様書.md, テスト仕様書.xlsx）をZIPファイルにまとめて返却します。
+- **リアルタイム進捗表示**: Azure Blob Storageを利用し、処理の進捗状況をUIに10秒間隔で反映します。
 
 ---
 
@@ -42,17 +43,28 @@
 │ Web Apps        │    │                 │    │ (Claude Sonnet 4.5) │
 │                 │    │                 │    │                     │
 └─────────────────┘    └─────────────────┘    └─────────────────────┘
+        │                      │
+        │ 10秒ポーリング        │
+        └──────────────────────┘
+                 │
+                 ▼
+          ┌─────────────┐
+          │ Azure Blob  │
+          │ Storage     │
+          │ (進捗管理)   │
+          └─────────────┘
 ```
 
 ### モジュール構成
 
 ```
 testgen-unit-diff/
-├── function_app.py          # HTTPエンドポイント（通常版・差分版）
+├── function_app.py          # HTTPエンドポイント（通常版・差分版・進捗取得）
 ├── core/                    # ビジネスロジック層
 │   ├── normal_mode.py       # 通常モード処理
 │   ├── diff_mode.py         # 差分モード処理
 │   ├── llm_service.py       # LLM呼び出し抽象化
+│   ├── progress_manager.py  # 進捗管理（Azure Blob Storage）
 │   └── utils.py             # 共通ユーティリティ
 ├── frontend/                # フロントエンド
 │   ├── index.html
@@ -288,6 +300,10 @@ MODEL_TEST_SPEC=claude-sonnet-4-5
 
 # 差分検知用モデル
 MODEL_DIFF_DETECTION=claude-sonnet-4-5
+
+# -------------------- Azure Storage 接続情報 --------------------
+# 進捗管理用のBlob Storage接続文字列 (必須)
+AZURE_STORAGE_CONNECTION_STRING=<ここに接続文字列を記述>
 ```
 
 **モデル選択について:**
@@ -344,7 +360,7 @@ MODEL_DIFF_DETECTION=claude-sonnet-4-5
 4.  **環境変数の設定**
     - Azureポータルで作成したFunction Appを開く
     - 「設定」→「環境変数」→「+追加」→「アプリケーション設定の追加/編集」
-    - `.env`ファイルの内容を1つずつ追加（`AZURE_FOUNDRY_API_KEY`, `AZURE_FOUNDRY_ENDPOINT`, `MODEL_STRUCTURING`, `MODEL_TEST_PERSPECTIVES`, `MODEL_TEST_SPEC`, `MODEL_DIFF_DETECTION`）
+    - `.env`ファイルの内容を1つずつ追加（`AZURE_FOUNDRY_API_KEY`, `AZURE_FOUNDRY_ENDPOINT`, `MODEL_STRUCTURING`, `MODEL_TEST_PERSPECTIVES`, `MODEL_TEST_SPEC`, `MODEL_DIFF_DETECTION`, `AZURE_STORAGE_CONNECTION_STRING`）
 
 5.  **関数キーの取得（セキュリティ設定）**
     - AzureポータルでFunction Appを開く
@@ -424,6 +440,7 @@ MODEL_DIFF_DETECTION=claude-sonnet-4-5
 -   `python-dotenv`: `.env`ファイルから環境変数を読み込むために使用。ローカル開発で接続情報を管理します。
 -   `pandas`: データ操作とExcelファイルの読み込みに使用。
 -   `openpyxl`: Excelファイルの書き込みと操作に使用。
+-   `azure-storage-blob`: Azure Blob Storageを使用した進捗管理に使用。
 
 ### 2. 開発・デプロイツール
 
@@ -446,3 +463,29 @@ MODEL_DIFF_DETECTION=claude-sonnet-4-5
 
 -   **Azure AI Foundry**:
     Microsoft Azure上で提供される、Claude Sonnet 4.5などの大規模言語モデルを利用するためのサービス。2024年11月18日のMicrosoftとAnthropicの提携により利用可能になりました。
+
+-   **Azure Blob Storage**:
+    処理の進捗状況を保存・管理するためのストレージサービス。フロントエンドが10秒間隔でポーリングし、リアルタイムに進捗を表示します。
+
+---
+
+## 進捗表示機能
+
+処理の進行状況をリアルタイムでUIに表示する機能を実装しています。
+
+### セットアップ
+
+1. **Azure Storage Accountの作成**
+   - Azureポータルで「ストレージアカウント」を作成
+   - 「アクセスキー」から接続文字列をコピー
+   - `.env`ファイルに`AZURE_STORAGE_CONNECTION_STRING`を追加
+
+2. **進捗ステージ**
+   - 📄 設計書を構造化中... (10%)
+   - 🔍 差分を検知中... (30% - 差分モードのみ)
+   - 💡 テスト観点を抽出中... (40-50%)
+   - 📝 テスト仕様書を生成中... (70%)
+   - 🔄 成果物を変換中... (90%)
+   - ✅ 完了しました (100%)
+
+詳細は`PROGRESS_FEATURE.md`を参照してください。

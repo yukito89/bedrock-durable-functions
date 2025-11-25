@@ -79,11 +79,26 @@
             <br />
             <button id="uploadBtn">アップロードして生成</button>
 
+            <!-- 進捗バー -->
+            <div id="progressContainer" class="progress-container" style="display:none;">
+                <div class="progress-bar-wrapper">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <p id="progressText" class="progress-text">処理中...</p>
+            </div>
+
             <p id="status"></p>
         </div>
         <script>
             document.getElementById('mainContent').style.display = 'block';
+            console.log('HTML読み込み完了');
         </script>
-        <script src="script.js"></script>
+        <script>
+            console.log('script.js読み込み開始');
+        </script>
+        <script src="script.js?v=13"></script>
+        <script>
+            console.log('script.js読み込み完了');
+        </script>
     </body>
 </html>
