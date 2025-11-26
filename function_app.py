@@ -369,7 +369,7 @@ def process_test_generation(inputData) -> dict:
         raise
 
 
-# ==================== Status & Download ====================
+# ==================== Status ====================
 
 @app.route(route="status/{instanceId}", methods=["GET", "OPTIONS"])
 @app.durable_client_input(client_name="client")
@@ -428,6 +428,7 @@ async def get_status(req: func.HttpRequest, client) -> func.HttpResponse:
             headers=CORS_HEADERS
         )
 
+# ==================== Download ====================
 
 @app.route(route="download/{instanceId}", methods=["GET", "OPTIONS"])
 async def download_result(req: func.HttpRequest) -> func.HttpResponse:
