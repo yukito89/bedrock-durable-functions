@@ -1,38 +1,7 @@
 {
     "version": "2.0",
-    "logging": {
-        "fileLoggingMode": "always",
-        "logLevel": {
-            "Function": "Information",
-            "default": "Warning",
-            "Host": "Warning",
-            "Azure.Storage.Blobs": "Warning",
-            "Azure.Core": "Warning",
-            "DurableTask.AzureStorage": "Warning"
-        },
-        "applicationInsights": {
-            "samplingSettings": {
-                "isEnabled": true,
-                "excludedTypes": "Request"
-            }
-        }
-    },
     "extensionBundle": {
         "id": "Microsoft.Azure.Functions.ExtensionBundle",
         "version": "[4.*, 5.0.0)"
-    },
-    "extensions": {
-        "http": {
-            "routePrefix": "api",
-            "maxOutstandingRequests": 200,
-            "maxConcurrentRequests": 100,
-            "dynamicThrottlesEnabled": true,
-            "customHeaders": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization"
-            }
-        }
-    },
-    "functionTimeout": "00:30:00"
+    }
 }
