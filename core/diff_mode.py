@@ -49,7 +49,7 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     
     # Step 3: 差分検知
     if progress:
-        progress.update_progress(job_id, "diff", "差分を検知中...", 30)
+        progress.update_progress(job_id, "diff", "差分を検知中...", 40)
     # LLMを使用して旧版と新版の設計書を比較し、変更点を抽出
     logging.info("差分検知中...")
     diff_prompt = f"【旧版設計書】\n{old_structured_md}\n\n【新版設計書】\n{new_structured_md}"
@@ -58,7 +58,7 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     
     # Step 4: テスト観点抽出（差分考慮）
     if progress:
-        progress.update_progress(job_id, "perspectives", "テスト観点を抽出中...", 50)
+        progress.update_progress(job_id, "perspectives", "テスト観点を抽出中...", 60)
     # 変更差分を考慮したテスト観点をLLMで抽出
     logging.info("テスト観点抽出中...")
     perspectives_prompt = f"【新版設計書】\n{new_structured_md}\n\n【変更差分】\n{diff_summary}"
@@ -66,7 +66,7 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     
     # Step 5: テスト仕様書生成（差分・旧版考慮）
     if progress:
-        progress.update_progress(job_id, "testspec", "テスト仕様書を生成中...", 70)
+        progress.update_progress(job_id, "testspec", "テスト仕様書を生成中...", 80)
     # 新版設計書、変更差分、旧版テスト仕様書を考慮してテスト仕様書を生成
     logging.info("テスト仕様書生成中...")
     spec_prompt = (
