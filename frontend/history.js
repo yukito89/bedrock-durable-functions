@@ -78,7 +78,18 @@ async function deleteItem(instanceId) {
 function formatDate(isoString) {
     if (!isoString) return '-';
     const date = new Date(isoString);
-    return date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    
+    // UTC時刻に+9時間して日本時間に変換
+    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+    
+    return jstDate.toLocaleString('ja-JP', { 
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
 }
 
 function formatSize(bytes) {
