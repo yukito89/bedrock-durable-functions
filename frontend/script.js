@@ -10,6 +10,7 @@ const uploadBtn = document.querySelector("#uploadBtn");
 const progressBar = document.querySelector("#progressBar");
 const progressText = document.querySelector("#progressText");
 const progressContainer = document.querySelector("#progressContainer");
+const historyLink = document.querySelector("#historyLink");
 
 console.log('DOM要素取得:', {status, uploadBtn, progressBar, progressText, progressContainer});
 
@@ -81,6 +82,8 @@ uploadBtn.addEventListener("click", async () => {
     formData.append("granularity", granularity);
 
     uploadBtn.disabled = true;
+    historyLink.style.pointerEvents = "none";
+    historyLink.style.opacity = "0.5";
     status.textContent = mode === "diff" ? "生成中...（差分検知を含むため時間がかかる場合があります）" : "生成中...";
     progressContainer.style.display = "block";
     progressBar.style.width = "0%";
@@ -103,6 +106,8 @@ uploadBtn.addEventListener("click", async () => {
             const errorText = await startRes.text();
             status.textContent = `エラー: ${errorText}`;
             uploadBtn.disabled = false;
+            historyLink.style.pointerEvents = "auto";
+            historyLink.style.opacity = "1";
             return;
         }
         
@@ -119,6 +124,8 @@ uploadBtn.addEventListener("click", async () => {
         progressContainer.style.display = "none";
         status.textContent = `通信エラー: ${err.message}`;
         uploadBtn.disabled = false;
+        historyLink.style.pointerEvents = "auto";
+        historyLink.style.opacity = "1";
     }
 });
 
@@ -143,6 +150,8 @@ async function pollStatus(instanceId) {
             progressContainer.style.display = "none";
             status.textContent = `❌ サーバーエラー (${res.status})`;
             uploadBtn.disabled = false;
+            historyLink.style.pointerEvents = "auto";
+            historyLink.style.opacity = "1";
             return;
         }
         
@@ -159,6 +168,8 @@ async function pollStatus(instanceId) {
             progressContainer.style.display = "none";
             status.innerHTML = '✅ 完了しました　<a href="history.html" style="color: #4CAF50;">📋 履歴ページでダウンロード</a>';
             uploadBtn.disabled = false;
+            historyLink.style.pointerEvents = "auto";
+            historyLink.style.opacity = "1";
         }
         
         // 失敗時
@@ -167,6 +178,8 @@ async function pollStatus(instanceId) {
             progressContainer.style.display = "none";
             status.textContent = "❌ 処理に失敗しました";
             uploadBtn.disabled = false;
+            historyLink.style.pointerEvents = "auto";
+            historyLink.style.opacity = "1";
         }
         
     } catch (err) {
@@ -175,6 +188,8 @@ async function pollStatus(instanceId) {
         progressContainer.style.display = "none";
         status.textContent = `❌ サーバーエラー: ${err.message}`;
         uploadBtn.disabled = false;
+        historyLink.style.pointerEvents = "auto";
+        historyLink.style.opacity = "1";
     }
 }
 
