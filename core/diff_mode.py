@@ -32,11 +32,14 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
             progress = None
     
     # Step 1: 新版Excelを構造化
-    if progress:
-        progress.update_progress(job_id, "structuring", "新版設計書を構造化中...", 10)
-    # アップロードされた新版ExcelファイルをMarkdown形式に変換
     logging.info("新版Excelを構造化中...")
-    new_structured_md = utils.process_excel_to_markdown(new_excel_files)
+    
+    # 進捗コールバック関数を定義
+    def progress_callback(stage, message, progress_percent):
+        if progress:
+            progress.update_progress(job_id, stage, message, progress_percent)
+    
+    new_structured_md = utils.process_excel_to_markdown(new_excel_files, progress_callback, job_id)
     
     # Step 2: 旧版情報の取得
     # アップロードされた旧版ファイルを読み込む

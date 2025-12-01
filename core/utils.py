@@ -7,18 +7,35 @@ from pathlib import Path
 
 from core import llm_service
 
-def process_excel_to_markdown(files) -> str:
+def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> str:
     """
     Excelファイル群を構造化されたMarkdownに変換する
     
     Args:
         files: アップロードされたExcelファイルのリスト
+        progress_callback: 進捗更新用のコールバック関数
+        job_id: ジョブID
     
     Returns:
         str: 構造化されたMarkdown形式の設計書
     """
     all_md_sheets = []  # 各シートの構造化結果を格納
     all_toc_list = []   # 目次用のリンクリスト
+    
+    # 総シート数をカウント
+    total_sheets = 0
+    for file in files:
+        file.stream.seek(0)
+        file_bytes = file.read()
+        excel_data = pd.read_excel(io.BytesIO(file_bytes), sheet_name=None, header=None)
+        total_sheets += len(excel_data)
+    
+    logging.info(f"総シート数: {total_sheets}")
+    
+    # 進捗計算: 10%から40%までを総シート数で均等に分割
+    progress_range = 30  # 10%から40%までの範囲
+    progress_per_sheet = progress_range / total_sheets if total_sheets > 0 else 0
+    current_sheet = 0
     
     for file in files:
         # Excelファイルを読み込む
@@ -42,7 +59,14 @@ def process_excel_to_markdown(files) -> str:
             
             # LLMで構造化
             try:
-                logging.info(f"「{full_sheet_name}」を構造化...")
+                current_sheet += 1
+                logging.info(f"「{full_sheet_name}」を構造化... ({current_sheet}/{total_sheets})")
+                
+                # 進捗更新: 10%から40%までを総シート数で均等に分割
+                progress_percent = int(10 + (current_sheet * progress_per_sheet))
+                if progress_callback and job_id:
+                    progress_callback("structuring", f"設計書を構造化中... ({current_sheet}/{total_sheets}シート)", progress_percent)
+                
                 structured_content = llm_service.structuring(structuring_prompt)
                 sheet_content += structured_content
             except Exception as e:

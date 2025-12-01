@@ -31,10 +31,14 @@ def generate_normal_test_spec(files, granularity: str, job_id: str = None) -> by
             progress = None
     
     # --- 1. Excelファイル群をMarkdownに変換 ---
-    if progress:
-        progress.update_progress(job_id, "structuring", "設計書を構造化中...", 10)
     logging.info("ExcelファイルをMarkdownに変換中...")
-    md_output_first = utils.process_excel_to_markdown(files)
+    
+    # 進捗コールバック関数を定義
+    def progress_callback(stage, message, progress_percent):
+        if progress:
+            progress.update_progress(job_id, stage, message, progress_percent)
+    
+    md_output_first = utils.process_excel_to_markdown(files, progress_callback, job_id)
     logging.info("Markdown変換が完了。")
     
     # --- 2. AIによるテスト観点抽出 ---
