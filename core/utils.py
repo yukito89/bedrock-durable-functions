@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core import llm_service
 
-def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> str:
+def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> tuple[str, dict]:
     """
     Excelファイル群を構造化されたMarkdownに変換する
     
@@ -17,10 +17,11 @@ def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> str
         job_id: ジョブID
     
     Returns:
-        str: 構造化されたMarkdown形式の設計書
+        tuple[str, dict]: (構造化されたMarkdown, 累積使用量情報)
     """
     all_md_sheets = []  # 各シートの構造化結果を格納
     all_toc_list = []   # 目次用のリンクリスト
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "model": ""}
     
     # 総シート数をカウント
     total_sheets = 0
@@ -67,7 +68,11 @@ def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> str
                 if progress_callback and job_id:
                     progress_callback("structuring", f"設計書を構造化中... ({current_sheet}/{total_sheets}シート)", progress_percent)
                 
-                structured_content = llm_service.structuring(structuring_prompt)
+                structured_content, usage = llm_service.structuring(structuring_prompt)
+                total_usage["input_tokens"] += usage["input_tokens"]
+                total_usage["output_tokens"] += usage["output_tokens"]
+                total_usage["model"] = usage["model"]
+                logging.info(f"シート {current_sheet}/{total_sheets} - 入力: {usage['input_tokens']:,}tok, 出力: {usage['output_tokens']:,}tok")
                 sheet_content += structured_content
             except Exception as e:
                 logging.error(f"AIによるシート「{full_sheet_name}」の構造化中にエラー: {e}")
@@ -80,7 +85,7 @@ def process_excel_to_markdown(files, progress_callback=None, job_id=None) -> str
     md_output += "\n".join(all_toc_list)
     md_output += "\n\n---\n\n"
     md_output += "\n\n---\n\n".join(all_md_sheets)
-    return md_output
+    return md_output, total_usage
 
 def convert_md_to_excel_and_csv(md_output: str, is_diff_mode: bool = False):
     """

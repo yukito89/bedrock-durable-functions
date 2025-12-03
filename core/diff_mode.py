@@ -39,7 +39,21 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
         if progress:
             progress.update_progress(job_id, stage, message, progress_percent)
     
-    new_structured_md = utils.process_excel_to_markdown(new_excel_files, progress_callback, job_id)
+    new_structured_md, total_usage = utils.process_excel_to_markdown(new_excel_files, progress_callback, job_id)
+    
+    # トークン使用量をログ出力
+    logging.info(f"Markdown変換が完了 - 入力トークン: {total_usage['input_tokens']:,}, "
+                 f"出力トークン: {total_usage['output_tokens']:,}, モデル: {total_usage['model']}")
+    
+    # コスト計算
+    if "haiku" in total_usage['model'].lower():
+        cost = (total_usage['input_tokens'] / 1_000_000 * 1.00) + (total_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in total_usage['model'].lower():
+        cost = (total_usage['input_tokens'] / 1_000_000 * 3.00) + (total_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"構造化コスト: ${cost:.4f}")
     
     # Step 2: 旧版情報の取得
     # アップロードされた旧版ファイルを読み込む
@@ -62,7 +76,19 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     # 変更差分を考慮したテスト観点をLLMで抽出
     logging.info("テスト観点抽出中...")
     perspectives_prompt = f"【新版設計書】\n{new_structured_md}\n\n【変更差分】\n{diff_summary}"
-    test_perspectives = llm_service.extract_perspectives_with_diff(perspectives_prompt)
+    test_perspectives, perspectives_usage = llm_service.extract_perspectives_with_diff(perspectives_prompt)
+    
+    logging.info(f"テスト観点抽出完了 - 入力: {perspectives_usage['input_tokens']:,}tok, "
+                 f"出力: {perspectives_usage['output_tokens']:,}tok")
+    
+    if "haiku" in perspectives_usage['model'].lower():
+        cost = (perspectives_usage['input_tokens'] / 1_000_000 * 1.00) + (perspectives_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in perspectives_usage['model'].lower():
+        cost = (perspectives_usage['input_tokens'] / 1_000_000 * 3.00) + (perspectives_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"観点抽出コスト: ${cost:.4f}")
     
     # Step 5: テスト仕様書生成（差分・旧版考慮）
     if progress:
@@ -75,8 +101,19 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
         f"【変更差分】\n{diff_summary}\n\n"
         f"【旧版テスト仕様書】\n{old_test_spec_md}"
     )
-    test_spec_md = llm_service.create_test_spec_with_diff(spec_prompt)
-    logging.info("テスト仕様書生成完了。")
+    test_spec_md, testspec_usage = llm_service.create_test_spec_with_diff(spec_prompt)
+    
+    logging.info(f"テスト仕様書生成完了 - 入力: {testspec_usage['input_tokens']:,}tok, "
+                 f"出力: {testspec_usage['output_tokens']:,}tok")
+    
+    if "haiku" in testspec_usage['model'].lower():
+        cost = (testspec_usage['input_tokens'] / 1_000_000 * 1.00) + (testspec_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in testspec_usage['model'].lower():
+        cost = (testspec_usage['input_tokens'] / 1_000_000 * 3.00) + (testspec_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"仕様書生成コスト: ${cost:.4f}")
     
     # Step 6: 成果物の変換
     if progress:
@@ -100,7 +137,16 @@ def generate_diff_test_spec(new_excel_files, old_structured_md_file, old_test_sp
     zip_buffer.seek(0)
     zip_bytes = zip_buffer.read()
     
+    # 合計コストを計算
+    total_cost = 0
+    for usage in [total_usage, perspectives_usage, testspec_usage]:
+        if "haiku" in usage['model'].lower():
+            total_cost += (usage['input_tokens'] / 1_000_000 * 1.00) + (usage['output_tokens'] / 1_000_000 * 5.00)
+        elif "sonnet" in usage['model'].lower():
+            total_cost += (usage['input_tokens'] / 1_000_000 * 3.00) + (usage['output_tokens'] / 1_000_000 * 15.00)
+    
     logging.info("差分版ZIPファイルの作成が完了しました。")
+    logging.info(f"=== 合計コスト: ${total_cost:.4f} ===")
     
     if progress:
         progress.update_progress(job_id, "completed", "完了しました", 100)

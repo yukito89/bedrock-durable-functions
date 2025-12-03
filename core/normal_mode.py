@@ -38,24 +38,59 @@ def generate_normal_test_spec(files, granularity: str, job_id: str = None) -> by
         if progress:
             progress.update_progress(job_id, stage, message, progress_percent)
     
-    md_output_first = utils.process_excel_to_markdown(files, progress_callback, job_id)
-    logging.info("Markdown変換が完了。")
+    md_output_first, total_usage = utils.process_excel_to_markdown(files, progress_callback, job_id)
+    
+    # トークン使用量をログ出力
+    logging.info(f"Markdown変換が完了 - 入力トークン: {total_usage['input_tokens']:,}, "
+                 f"出力トークン: {total_usage['output_tokens']:,}, モデル: {total_usage['model']}")
+    
+    # コスト計算
+    if "haiku" in total_usage['model'].lower():
+        cost = (total_usage['input_tokens'] / 1_000_000 * 1.00) + (total_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in total_usage['model'].lower():
+        cost = (total_usage['input_tokens'] / 1_000_000 * 3.00) + (total_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"構造化コスト: ${cost:.4f}")
     
     # --- 2. AIによるテスト観点抽出 ---
     if progress:
         progress.update_progress(job_id, "perspectives", "テスト観点を抽出中...", 40)
     logging.info("テスト観点を抽出中...")
     extract_perspectives_prompt = f"--- 設計書 ---\n{md_output_first}"
-    md_output_second = llm_service.extract_test_perspectives(extract_perspectives_prompt)
-    logging.info("テスト観点抽出が完了。")
+    md_output_second, perspectives_usage = llm_service.extract_test_perspectives(extract_perspectives_prompt)
+    
+    logging.info(f"テスト観点抽出完了 - 入力: {perspectives_usage['input_tokens']:,}tok, "
+                 f"出力: {perspectives_usage['output_tokens']:,}tok")
+    
+    if "haiku" in perspectives_usage['model'].lower():
+        cost = (perspectives_usage['input_tokens'] / 1_000_000 * 1.00) + (perspectives_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in perspectives_usage['model'].lower():
+        cost = (perspectives_usage['input_tokens'] / 1_000_000 * 3.00) + (perspectives_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"観点抽出コスト: ${cost:.4f}")
 
     # --- 3. AIによるテスト仕様書生成 ---
     if progress:
         progress.update_progress(job_id, "testspec", "テスト仕様書を生成中...", 70)
     logging.info("テスト仕様書を生成中...")
     test_gen_prompt = f"--- 設計書 ---\n{md_output_first}\n\n--- テスト観点 ---\n{md_output_second}"
-    md_output_third = llm_service.create_test_spec(test_gen_prompt, granularity)
-    logging.info("テスト仕様書の生成が完了。")
+    md_output_third, testspec_usage = llm_service.create_test_spec(test_gen_prompt, granularity)
+    
+    logging.info(f"テスト仕様書生成完了 - 入力: {testspec_usage['input_tokens']:,}tok, "
+                 f"出力: {testspec_usage['output_tokens']:,}tok")
+    
+    if "haiku" in testspec_usage['model'].lower():
+        cost = (testspec_usage['input_tokens'] / 1_000_000 * 1.00) + (testspec_usage['output_tokens'] / 1_000_000 * 5.00)
+    elif "sonnet" in testspec_usage['model'].lower():
+        cost = (testspec_usage['input_tokens'] / 1_000_000 * 3.00) + (testspec_usage['output_tokens'] / 1_000_000 * 15.00)
+    else:
+        cost = 0
+    
+    logging.info(f"仕様書生成コスト: ${cost:.4f}")
 
     # --- 4. 成果物の変換 ---
     if progress:
@@ -80,7 +115,16 @@ def generate_normal_test_spec(files, granularity: str, job_id: str = None) -> by
     
     zip_buffer.seek(0)
     zip_bytes = zip_buffer.read()
+    # 合計コストを計算
+    total_cost = 0
+    for usage in [total_usage, perspectives_usage, testspec_usage]:
+        if "haiku" in usage['model'].lower():
+            total_cost += (usage['input_tokens'] / 1_000_000 * 1.00) + (usage['output_tokens'] / 1_000_000 * 5.00)
+        elif "sonnet" in usage['model'].lower():
+            total_cost += (usage['input_tokens'] / 1_000_000 * 3.00) + (usage['output_tokens'] / 1_000_000 * 15.00)
+    
     logging.info("ZIPファイルの作成が完了しました。")
+    logging.info(f"=== 合計コスト: ${total_cost:.4f} ===")
     
     if progress:
         progress.update_progress(job_id, "completed", "完了しました", 100)

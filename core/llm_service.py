@@ -54,7 +54,7 @@ def initialize_client():
         base_url=foundry_endpoint
     )
 
-def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int = 10) -> str:
+def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int = 10) -> tuple[str, dict]:
     """
     Azure AI Foundry (Claude) を呼び出す共通関数
     
@@ -65,7 +65,8 @@ def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int 
         max_retries: レート制限エラー時の最大リトライ回数
     
     Returns:
-        str: LLMからの応答テキスト
+        tuple[str, dict]: (LLMからの応答テキスト, 使用量情報)
+            使用量情報: {"input_tokens": int, "output_tokens": int, "model": str}
     
     Raises:
         RuntimeError: API呼び出しに失敗した場合
@@ -80,6 +81,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int 
         try:
             # Azure AI Foundry (Claude) を呼び出し（ストリーミング有効）
             result = ""
+            usage_info = {}
             with foundry_client.messages.stream(
                 model=model,
                 system=system_prompt,
@@ -88,7 +90,13 @@ def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int 
             ) as stream:
                 for text in stream.text_stream:
                     result += text
-            return result
+                final_message = stream.get_final_message()
+                usage_info = {
+                    "input_tokens": final_message.usage.input_tokens,
+                    "output_tokens": final_message.usage.output_tokens,
+                    "model": model
+                }
+            return result, usage_info
 
         except RateLimitError as e:
             # Anthropic SDKのレート制限エラー
@@ -116,32 +124,52 @@ def call_llm(system_prompt: str, user_prompt: str, model: str, max_retries: int 
 
 # --- ビジネスロジック固有のLLM呼び出し関数 ---
 
-def structuring(prompt: str) -> str:
-    """Excelシートの生データをAIで構造化されたMarkdownに変換"""
+def structuring(prompt: str) -> tuple[str, dict]:
+    """Excelシートの生データをAIで構造化されたMarkdownに変換
+    
+    Returns:
+        tuple[str, dict]: (構造化されたMarkdown, 使用量情報)
+    """
     return call_llm(STRUCTURING_PROMPT, prompt, model_structuring)
 
-def extract_test_perspectives(prompt: str) -> str:
-    """設計書からAIでテスト観点を抽出"""
+def extract_test_perspectives(prompt: str) -> tuple[str, dict]:
+    """設計書からAIでテスト観点を抽出
+    
+    Returns:
+        tuple[str, dict]: (テスト観点, 使用量情報)
+    """
     return call_llm(EXTRACT_TEST_PERSPECTIVES_PROMPT, prompt, model_test_perspectives)
 
-def create_test_spec(prompt: str, granularity: str = "simple") -> str:
+def create_test_spec(prompt: str, granularity: str = "simple") -> tuple[str, dict]:
     """テスト仕様書を生成
     
     Args:
         prompt: 設計書とテスト観点を含むプロンプト
         granularity: テスト粒度（"simple" or "detailed"）
+    
+    Returns:
+        tuple[str, dict]: (テスト仕様書, 使用量情報)
     """
     system_prompt = CREATE_TEST_SPEC_PROMPT_DETAILED if granularity == "detailed" else CREATE_TEST_SPEC_PROMPT_SIMPLE
     return call_llm(system_prompt, prompt, model_test_spec)
 
 def detect_diff(prompt: str) -> str:
     """旧版と新版の設計書から差分を検知"""
-    return call_llm(DIFF_DETECTION_PROMPT, prompt, model_diff_detection)
+    result, _ = call_llm(DIFF_DETECTION_PROMPT, prompt, model_diff_detection)
+    return result
 
-def extract_perspectives_with_diff(prompt: str) -> str:
-    """差分を考慮してテスト観点を抽出（差分モード用）"""
+def extract_perspectives_with_diff(prompt: str) -> tuple[str, dict]:
+    """差分を考慮してテスト観点を抽出（差分モード用）
+    
+    Returns:
+        tuple[str, dict]: (テスト観点, 使用量情報)
+    """
     return call_llm(EXTRACT_TEST_PERSPECTIVES_PROMPT_WITH_DIFF, prompt, model_test_perspectives)
 
-def create_test_spec_with_diff(prompt: str) -> str:
-    """差分と旧版仕様書を考慮してテスト仕様書を生成（差分モード用）"""
+def create_test_spec_with_diff(prompt: str) -> tuple[str, dict]:
+    """差分と旧版仕様書を考慮してテスト仕様書を生成（差分モード用）
+    
+    Returns:
+        tuple[str, dict]: (テスト仕様書, 使用量情報)
+    """
     return call_llm(CREATE_TEST_SPEC_PROMPT_WITH_DIFF, prompt, model_test_spec)
