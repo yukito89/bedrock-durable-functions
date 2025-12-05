@@ -406,6 +406,10 @@ button:disabled {
     margin: 0 auto;
 }
 
+.history-container h1 {
+    text-align: left;
+}
+
 /* 履歴テーブル */
 .history-table {
     width: 100%;
@@ -473,12 +477,8 @@ button:disabled {
 }
 
 /* ページネーションを中央に配置 */
-.history-container {
+.history-container > div {
     text-align: center;
-}
-
-.history-table {
-    text-align: left;
 }
 
 /* ページネーションボタン */
