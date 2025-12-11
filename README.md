@@ -2,7 +2,7 @@
 
 このアプリケーションは、Excel形式の設計書をアップロードすると、LLM（大規模言語モデル）を利用して構造化された設計書、テスト観点、そして単体テスト仕様書を自動生成するAzure Functionsアプリケーションです。
 
-バックエンドのLLMは、**Azure AI Foundry** 経由で **Claude Sonnet 4.5** を使用します。
+バックエンドのLLMは、**AWS Bedrock** 経由で **Claude Sonnet 4.5** を使用します。
 
 ## 主な機能
 
@@ -40,7 +40,7 @@
 ┌─────────────────┐    ┌──────────────────────────────────┐    ┌─────────────────────┐
 │   フロントエンド │    │   バックエンド (Durable Functions)│    │   LLMサービス        │
 │                 │    │                                  │    │                     │
-│ Azure Static    │───▶│ Starter → Orchestrator          │───▶│ Azure AI Foundry    │
+│ Azure Static    │───▶│ Starter → Orchestrator          │───▶│ AWS Bedrock         │
 │ Web Apps        │    │              ↓                   │    │ (Claude Sonnet 4.5) │
 │                 │    │           Activity               │    │                     │
 └─────────────────┘    └──────────────────────────────────┘    └─────────────────────┘
@@ -229,7 +229,62 @@ pip install -r requirements.txt
 2. 「アクセスキー」→「キーの表示」
 3. **key1**の「接続文字列」をコピー
 
-### 2. .envファイルの設定
+### 2. AWS IAMユーザーの作成とポリシー設定
+
+#### IAMユーザーの作成
+
+1. [AWS IAMコンソール](https://console.aws.amazon.com/iam/)にアクセス
+2. 「ユーザー」→「ユーザーを作成」
+3. ユーザー名を入力（例: `testgen-bedrock-user`）
+4. 「次へ」をクリック
+
+#### 許可ポリシーの設定
+
+1. 「ポリシーを直接アタッチする」を選択
+2. 「ポリシーの作成」をクリック
+3. 「JSON」タブを選択し、以下のポリシーを貼り付け:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+                "aws-marketplace:ViewSubscriptions",
+                "aws-marketplace:Subscribe"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+4. ポリシー名を入力（例: `BedrockInvokePolicy`）
+5. 「ポリシーの作成」→作成したポリシーをユーザーにアタッチ
+6. 「ユーザーの作成」を完了
+
+#### アクセスキーの作成
+
+1. 作成したユーザーを選択
+2. 「セキュリティ認証情報」タブ→「アクセスキーを作成」
+3. 「ローカルコード」を選択
+4. **アクセスキーID**と**シークレットアクセスキー**をコピー（後で使用）
+
+### 3. AWS Bedrockモデルへのアクセス有効化
+
+1. [AWS Bedrockコンソール](https://console.aws.amazon.com/bedrock/)にアクセス
+2. 左メニュー「Model access」を選択
+3. 「Manage model access」をクリック
+4. 以下のモデルにチェック:
+   - **Anthropic Claude Sonnet 4.5**
+   - **Anthropic Claude Haiku 4.5**（オプション：高速・低コスト）
+5. 「Request model access」をクリック
+6. アクセスが承認されるまで数分待機（通常は即時承認）
+
+### 4. .envファイルの設定
 
 `.env.example`をコピーして`.env`を作成:
 
@@ -240,28 +295,38 @@ copy .env.example .env
 `.env`ファイルに以下を設定:
 
 ```env
-# Azure AI Foundry (Claude) 接続情報
-AZURE_FOUNDRY_API_KEY=<APIキー>
-AZURE_FOUNDRY_ENDPOINT=<エンドポイントURL>
+# -------------------- AWS Bedrock 接続情報 --------------------
+# AWSリージョン（例：ap-northeast-1）
+AWS_REGION=ap-northeast-1
 
-# モデル選択
-MODEL_STRUCTURING=claude-sonnet-4-5
-MODEL_TEST_PERSPECTIVES=claude-sonnet-4-5
-MODEL_TEST_SPEC=claude-sonnet-4-5
-MODEL_DIFF_DETECTION=claude-sonnet-4-5
+# AWSアクセスキーID（必須）
+AWS_ACCESS_KEY_ID=<アクセスキーID>
 
-# Azure Storage 接続情報
+# AWSシークレットアクセスキー（必須）
+AWS_SECRET_ACCESS_KEY=<シークレットアクセスキー>
+
+# -------------------- モデル選択 --------------------
+# 構造化処理用モデル（推奨: jp.anthropic.claude-haiku-4-5-20251001-v1:0）
+MODEL_STRUCTURING=jp.anthropic.claude-haiku-4-5-20251001-v1:0
+
+# テスト観点抽出用モデル（推奨: jp.anthropic.claude-sonnet-4-5-20250929-v1:0）
+MODEL_TEST_PERSPECTIVES=jp.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+# テスト仕様書生成用モデル（推奨: jp.anthropic.claude-sonnet-4-5-20250929-v1:0）
+MODEL_TEST_SPEC=jp.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+# 差分検知用モデル（推奨: jp.anthropic.claude-sonnet-4-5-20250929-v1:0）
+MODEL_DIFF_DETECTION=jp.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+# -------------------- Azure Storage 接続情報 --------------------
+# 進捗管理用のBlob Storage接続文字列（必須）
 AZURE_STORAGE_CONNECTION_STRING=<接続文字列>
 ```
 
-### 3. Azure AI Foundryの設定
-
-1. [Azure AI Foundry](https://ai.azure.com/)にアクセス
-2. 新しいプロジェクトを作成
-3. 「Models + endpoints」→「+ Deploy model」
-4. 「Claude Sonnet 4.5」を検索して選択
-5. デプロイ名を設定（例: `claude-sonnet-4-5`）
-6. エンドポイントURLとAPIキーを`.env`に設定
+**利用可能なモデルID:**
+- `jp.anthropic.claude-sonnet-4-5-20250929-v1:0` - 高性能（推奨）
+- `jp.anthropic.claude-haiku-4-5-20251001-v1:0` - 高速・低コスト
+- `anthropic.claude-sonnet-4-5-v2:0` - グローバルリージョン用
 
 ---
 
@@ -308,8 +373,9 @@ func start
    - Azureポータルで作成したFunction Appを開く
    - 「設定」→「環境変数」→「+追加」
    - 以下の環境変数を追加:
-     - `AZURE_FOUNDRY_API_KEY`
-     - `AZURE_FOUNDRY_ENDPOINT`
+     - `AWS_REGION`
+     - `AWS_ACCESS_KEY_ID`
+     - `AWS_SECRET_ACCESS_KEY`
      - `MODEL_STRUCTURING`
      - `MODEL_TEST_PERSPECTIVES`
      - `MODEL_TEST_SPEC`
@@ -471,7 +537,7 @@ Azure Blob Storageを利用して、バックエンドの処理進捗をリア�
 
 - `azure-functions`: Azure Functionsのコアライブラリ
 - `azure-durable-functions`: Durable Functions用ライブラリ
-- `anthropic`: Anthropic Claude APIクライアント
+- `boto3`: AWS SDK for Python（Bedrock呼び出し用）
 - `python-dotenv`: 環境変数管理
 - `pandas`: データ操作とExcelファイル読み込み
 - `openpyxl`: Excelファイル書き込み
@@ -486,7 +552,7 @@ Azure Blob Storageを利用して、バックエンドの処理進捗をリア�
 
 - **Azure Functions**: サーバーレスコンピューティング
 - **Azure Static Web Apps**: 静的コンテンツホスティング
-- **Azure AI Foundry**: Claude Sonnet 4.5などのLLMサービス
+- **AWS Bedrock**: Claude Sonnet 4.5などのLLMサービス
 - **Azure Blob Storage**: 進捗管理・結果保存・Durable Functions状態管理
 
 ---
@@ -495,5 +561,7 @@ Azure Blob Storageを利用して、バックエンドの処理進捗をリア�
 
 - [Azure Durable Functions 公式ドキュメント](https://learn.microsoft.com/ja-jp/azure/azure-functions/durable/)
 - [Python Durable Functions](https://learn.microsoft.com/ja-jp/azure/azure-functions/durable/quickstart-python-vscode)
+- [AWS Bedrock 公式ドキュメント](https://docs.aws.amazon.com/bedrock/)
+- [Boto3 Bedrock Runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html)
 - [Blob Storage ライフサイクル管理](https://learn.microsoft.com/ja-jp/azure/storage/blobs/lifecycle-management-overview)
 - [Function App プラン比較](https://learn.microsoft.com/ja-jp/azure/azure-functions/functions-scale)
